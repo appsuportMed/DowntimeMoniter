@@ -259,8 +259,7 @@
         // Global variables for Firebase configuration and app ID.
         // These are expected to be provided by the Canvas environment.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        // FIX: Corrected the initialization of initialAuthToken
+        let firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // --- Firebase Initialization ---
@@ -270,18 +269,21 @@
         let userId = null;
         let isAuthReady = false;
 
-        // Ensure firebaseConfig has a projectId, or provide a placeholder if missing
-        if (!firebaseConfig.projectId) {
-            console.warn("Firebase projectId not found in __firebase_config. Using a placeholder.");
-            firebaseConfig.projectId = "your-placeholder-project-id"; // Use a placeholder
-            // Add other necessary default properties if they might be missing
-            firebaseConfig.apiKey = firebaseConfig.apiKey || "your-placeholder-api-key";
-            firebaseConfig.authDomain = firebaseConfig.authDomain || "your-placeholder-auth-domain";
-            firebaseConfig.databaseURL = firebaseConfig.databaseURL || "your-placeholder-database-url";
-            firebaseConfig.storageBucket = firebaseConfig.storageBucket || "your-placeholder-storage-bucket";
-            firebaseConfig.messagingSenderId = firebaseConfig.messagingSenderId || "your-placeholder-messaging-sender-id";
-            firebaseConfig.appId = firebaseConfig.appId || "your-placeholder-app-id";
+        // Ensure firebaseConfig has required properties, or provide clear placeholders
+        if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+            console.warn("Firebase projectId or apiKey not found in __firebase_config. Using non-functional placeholders. Please provide your actual Firebase config for full functionality.");
+            firebaseConfig = {
+                apiKey: firebaseConfig.apiKey || "YOUR_FIREBASE_API_KEY",
+                authDomain: firebaseConfig.authDomain || "YOUR_FIREBASE_AUTH_DOMAIN",
+                projectId: firebaseConfig.projectId || "YOUR_FIREBASE_PROJECT_ID",
+                storageBucket: firebaseConfig.storageBucket || "YOUR_FIREBASE_STORAGE_BUCKET",
+                messagingSenderId: firebaseConfig.messagingSenderId || "YOUR_FIREBASE_MESSAGING_SENDER_ID",
+                appId: firebaseConfig.appId || "YOUR_FIREBASE_APP_ID",
+                // Add any other missing properties with placeholders
+            };
+            updateStatusMessage("Firebase not fully configured. Data persistence and user ID may not work. See console for details.");
         }
+
 
         // Initialize Firebase and set up authentication listener
         document.addEventListener('DOMContentLoaded', async () => {
@@ -304,6 +306,7 @@
                         } catch (error) {
                             console.error("Firebase authentication error:", error);
                             userId = crypto.randomUUID(); // Fallback to random UUID
+                            updateStatusMessage("Authentication failed. Data persistence may not work. Check console.");
                         }
                     }
                     isAuthReady = true;
@@ -313,7 +316,7 @@
                 });
             } catch (error) {
                 console.error("Failed to initialize Firebase:", error);
-                updateStatusMessage("Error initializing Firebase. Check console for details.");
+                updateStatusMessage("Error initializing Firebase. Please provide valid Firebase config in the environment. See console for details.");
             }
         });
 
@@ -327,7 +330,6 @@
 
         // --- DOM Elements ---
         const urlInput = document.getElementById('url-input');
-        // FIX: Corrected assignment from `document = document.getElementById` to `document.getElementById`
         const addUrlBtn = document.getElementById('add-url-btn');
         const monitoredUrlsSection = document.getElementById('monitored-urls-section');
         const monitoredUrlsList = document.getElementById('monitored-urls-list');
@@ -346,20 +348,15 @@
         const analysisContent = document.getElementById('analysis-content');
 
         // --- UI Update Functions ---
-        // FIX: Moved element assignments here to ensure they are initialized before being accessed
-        // This resolves the "Cannot access 'userIdValueSpan' before initialization" error
-        // by ensuring all DOM elements are properly referenced before `updateUserIdDisplay` is called.
-        // It also ensures `addUrlBtn` is correctly assigned.
-
         function updateStatusMessage(message) {
             statusMessageSpan.textContent = message;
         }
 
         function updateUserIdDisplay() {
-            if (userId && userIdValueSpan) { // Added check for userIdValueSpan
+            if (userId && userIdValueSpan) {
                 userIdValueSpan.textContent = userId;
                 userIdDisplay.classList.remove('hidden');
-            } else if (userIdDisplay) { // Added check for userIdDisplay
+            } else if (userIdDisplay) {
                 userIdDisplay.classList.add('hidden');
             }
         }
@@ -611,7 +608,6 @@
                                 downTime: currentState.downTimeStart,
                                 upTime: upTime,
                                 duration: duration,
-                                // FIX: Corrected Date.2now() to Date.now()
                                 timestamp: Date.now()
                             });
                             console.log(`Downtime event recorded for ${targetUrl}.`);
