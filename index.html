@@ -318,6 +318,73 @@
                 console.error("Failed to initialize Firebase:", error);
                 updateStatusMessage("Error initializing Firebase. Please provide valid Firebase config in the environment. See console for details.");
             }
+
+            // --- Event Listeners (Moved inside DOMContentLoaded and added null checks) ---
+            if (addUrlBtn) {
+                addUrlBtn.addEventListener('click', addUrl);
+            } else {
+                console.error("Error: 'add-url-btn' not found.");
+            }
+
+            if (urlInput) {
+                urlInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        addUrl();
+                    }
+                });
+            } else {
+                console.error("Error: 'url-input' not found.");
+            }
+
+            if (startMonitoringBtn) {
+                startMonitoringBtn.addEventListener('click', startMonitoring);
+            } else {
+                console.error("Error: 'start-monitoring-btn' not found.");
+            }
+
+            if (stopMonitoringBtn) {
+                stopMonitoringBtn.addEventListener('click', stopMonitoring);
+            } else {
+                console.error("Error: 'stop-monitoring-btn' not found.");
+            }
+
+            if (downloadDowntimeReportBtn) {
+                downloadDowntimeReportBtn.addEventListener('click', () => downloadReport('downtime'));
+            } else {
+                console.error("Error: 'download-downtime-report-btn' not found.");
+            }
+
+            if (downloadDailyReportBtn) {
+                downloadDailyReportBtn.addEventListener('click', () => downloadReport('daily'));
+            } else {
+                console.error("Error: 'download-daily-report-btn' not found.");
+            }
+
+            if (closeModalBtn) {
+                closeModalBtn.addEventListener('click', () => {
+                    if (analysisModal) { // Ensure analysisModal exists before trying to access its style
+                        analysisModal.style.display = 'none';
+                    }
+                });
+            } else {
+                console.error("Error: '.close-button' not found.");
+            }
+
+            // Close modal if user clicks outside of it
+            if (analysisModal) {
+                window.addEventListener('click', (event) => {
+                    if (event.target === analysisModal) {
+                        analysisModal.style.display = 'none';
+                    }
+                });
+            } else {
+                console.error("Error: 'analysis-modal' not found for outside click listener.");
+            }
+
+            // Initial render on load
+            renderMonitoredUrls();
+            renderDowntimeHistory();
+            updateButtonStates();
         });
 
         // --- Application State ---
@@ -329,6 +396,7 @@
         let monitoringStates = {}; // { [url: string]: { status: 'UP' | 'DOWN' | null, downTimeStart: number | null } }
 
         // --- DOM Elements ---
+        // These are intentionally global to be accessible by all functions
         const urlInput = document.getElementById('url-input');
         const addUrlBtn = document.getElementById('add-url-btn');
         const monitoredUrlsSection = document.getElementById('monitored-urls-section');
@@ -349,7 +417,11 @@
 
         // --- UI Update Functions ---
         function updateStatusMessage(message) {
-            statusMessageSpan.textContent = message;
+            if (statusMessageSpan) {
+                statusMessageSpan.textContent = message;
+            } else {
+                console.warn("Status message span not found.");
+            }
         }
 
         function updateUserIdDisplay() {
@@ -362,6 +434,11 @@
         }
 
         function renderMonitoredUrls() {
+            if (!monitoredUrlsList || !monitoredUrlsSection) {
+                console.error("Error: Monitored URLs list or section not found for rendering.");
+                return;
+            }
+
             monitoredUrlsList.innerHTML = ''; // Clear existing list
             if (monitoredUrls.length > 0) {
                 monitoredUrlsSection.classList.remove('hidden');
@@ -433,6 +510,11 @@
 
 
         function renderDowntimeHistory() {
+            if (!downtimeHistoryTableBody || !noHistoryMessage || !downtimeTableWrapper || !downloadDowntimeReportBtn) {
+                console.error("Error: Downtime history elements not found for rendering.");
+                return;
+            }
+
             downtimeHistoryTableBody.innerHTML = ''; // Clear existing table rows
             if (downtimeHistory.length === 0) {
                 noHistoryMessage.classList.remove('hidden');
@@ -483,6 +565,12 @@
         }
 
         function updateButtonStates() {
+            // Check if essential buttons exist before attempting to modify them
+            if (!urlInput || !addUrlBtn || !startMonitoringBtn || !stopMonitoringBtn || !downloadDowntimeReportBtn || !downloadDailyReportBtn) {
+                console.warn("One or more essential buttons/inputs not found. Cannot update all button states.");
+                return;
+            }
+
             urlInput.disabled = isMonitoring;
             addUrlBtn.disabled = isMonitoring;
             startMonitoringBtn.disabled = isMonitoring || monitoredUrls.length === 0;
@@ -544,23 +632,25 @@
 
         // --- Firebase Firestore Listener ---
         function setupDowntimeHistoryListener() {
-            if (db && userId && isAuthReady) {
-                const downtimeCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/downtime_events`);
-                const q = query(downtimeCollectionRef);
-
-                onSnapshot(q, (snapshot) => {
-                    downtimeHistory = [];
-                    snapshot.forEach((doc) => {
-                        downtimeHistory.push({ id: doc.id, ...doc.data() });
-                    });
-                    // Sort history by downTime in descending order for display
-                    downtimeHistory.sort((a, b) => b.downTime - a.downTime);
-                    renderDowntimeHistory();
-                }, (error) => {
-                    console.error("Error fetching downtime history:", error);
-                    updateStatusMessage("Error loading history. Check console.");
-                });
+            if (!db || !userId || !isAuthReady) {
+                console.warn("Firebase not ready for downtime history listener. DB, userId, or auth status is missing.");
+                return;
             }
+            const downtimeCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/downtime_events`);
+            const q = query(downtimeCollectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                downtimeHistory = [];
+                snapshot.forEach((doc) => {
+                    downtimeHistory.push({ id: doc.id, ...doc.data() });
+                });
+                // Sort history by downTime in descending order for display
+                downtimeHistory.sort((a, b) => b.downTime - a.downTime);
+                renderDowntimeHistory();
+            }, (error) => {
+                console.error("Error fetching downtime history:", error);
+                updateStatusMessage("Error loading history. Check console.");
+            });
         }
 
         // --- Core Monitoring Logic ---
@@ -638,8 +728,15 @@
                     [targetUrl]: { status: 'DOWN', downTimeStart: newDownTimeStart }
                 };
                 updateLiveUrlStatus(targetUrl, 'DOWN'); // Update live status display
-                console.error(`Error checking status for ${targetUrl}:`, error); // Log the full error object for more details
-                console.warn(`Failed to fetch ${targetUrl}. This could be due to the website being genuinely down, network issues, or browser security policies (CORS) preventing direct access. The monitoring tool uses a proxy, but some sites may still block requests.`);
+
+                // Enhanced error logging for Failed to fetch
+                if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                    console.error(`Network Error: Could not fetch ${targetUrl} via proxy. This often means the proxy is unreachable, the target server is blocking the proxy, or there's a client-side network issue.`, error);
+                } else {
+                    console.error(`Error checking status for ${targetUrl}:`, error); // Log the full error object for more details
+                }
+                console.warn(`Monitoring for ${targetUrl} failed. This could be due to the website being genuinely down, network issues, the proxy being unreliable, or security policies (CORS) preventing access.`);
+
 
                 // Log the 'DOWN' status due to fetch error to daily_monitoring_logs
                 if (db && userId) {
@@ -704,6 +801,10 @@
         }
 
         function addUrl() {
+            if (!urlInput) {
+                console.error("Error: URL input field not found.");
+                return;
+            }
             const trimmedUrl = urlInput.value.trim();
             if (trimmedUrl && !monitoredUrls.includes(trimmedUrl)) {
                 monitoredUrls.push(trimmedUrl);
@@ -769,6 +870,12 @@
                 today.setHours(0, 0, 0, 0);
                 const startOfDay = today.getTime();
                 const endOfDay = Date.now(); // Up to the current moment
+
+                if (!db || !userId) {
+                    console.error("Firestore DB or userId not available for daily report download.");
+                    updateStatusMessage("Cannot download daily report: Firebase not ready.");
+                    return;
+                }
 
                 const dailyLogsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/daily_monitoring_logs`);
                 const q = query(dailyLogsCollectionRef);
@@ -845,6 +952,10 @@
 
         // --- LLM Integration: Downtime Analysis ---
         async function showDowntimeAnalysis(eventData) {
+            if (!analysisModal || !analysisContent) {
+                console.error("Error: Analysis modal or content element not found.");
+                return;
+            }
             analysisModal.style.display = 'flex'; // Show the modal
             analysisContent.innerHTML = '<p class="text-center text-primary font-semibold">Loading analysis... <span class="animate-pulse">...</span></p>';
 
@@ -897,35 +1008,22 @@
         }
 
         // --- Modal Event Listeners ---
-        closeModalBtn.addEventListener('click', () => {
-            analysisModal.style.display = 'none';
-        });
+        // These are now attached within the DOMContentLoaded block with null checks
+        // closeModalBtn.addEventListener('click', () => {
+        //     analysisModal.style.display = 'none';
+        // });
+        // window.addEventListener('click', (event) => {
+        //     if (event.target === analysisModal) {
+        //         analysisModal.style.display = 'none';
+        //     }
+        // });
 
-        // Close modal if user clicks outside of it
-        window.addEventListener('click', (event) => {
-            if (event.target === analysisModal) {
-                analysisModal.style.display = 'none';
-            }
-        });
-
-        // --- Event Listeners ---
-        addUrlBtn.addEventListener('click', addUrl);
-        urlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addUrl();
-            }
-        });
-        startMonitoringBtn.addEventListener('click', startMonitoring);
-        stopMonitoringBtn.addEventListener('click', stopMonitoring);
-        downloadDowntimeReportBtn.addEventListener('click', () => downloadReport('downtime')); // Updated
-        downloadDailyReportBtn.addEventListener('click', () => downloadReport('daily')); // New
-
-        // Initial render on load
-        document.addEventListener('DOMContentLoaded', () => {
-            renderMonitoredUrls();
-            renderDowntimeHistory();
-            updateButtonStates();
-        });
+        // Initial render on load (now part of DOMContentLoaded)
+        // document.addEventListener('DOMContentLoaded', () => {
+        //     renderMonitoredUrls();
+        //     renderDowntimeHistory();
+        //     updateButtonStates();
+        // });
     </script>
 </body>
 </html>
