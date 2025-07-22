@@ -598,6 +598,7 @@
                                 downTime: currentState.downTimeStart,
                                 upTime: upTime,
                                 duration: duration,
+                                // FIX: Corrected Date.2now() to Date.now()
                                 timestamp: Date.now()
                             });
                             console.log(`Downtime event recorded for ${targetUrl}.`);
