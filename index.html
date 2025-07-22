@@ -281,13 +281,62 @@
                 appId: firebaseConfig.appId || "YOUR_FIREBASE_APP_ID",
                 // Add any other missing properties with placeholders
             };
-            updateStatusMessage("Firebase not fully configured. Data persistence and user ID may not work. See console for details.");
+            // Initial status update before DOM elements are guaranteed to be ready
+            // This message will be updated once DOM is loaded and statusMessageSpan is available
         }
+
+
+        // --- DOM Elements ---
+        // Moved inside DOMContentLoaded to ensure they are available when accessed
+        let urlInput;
+        let addUrlBtn;
+        let monitoredUrlsSection;
+        let monitoredUrlsList;
+        let startMonitoringBtn;
+        let stopMonitoringBtn;
+        let statusMessageSpan;
+        let userIdDisplay;
+        let userIdValueSpan;
+        let noHistoryMessage;
+        let downtimeTableWrapper;
+        let downtimeHistoryTableBody;
+        let downloadDowntimeReportBtn;
+        let downloadDailyReportBtn;
+        let analysisModal;
+        let closeModalBtn;
+        let analysisContent;
 
 
         // Initialize Firebase and set up authentication listener
         document.addEventListener('DOMContentLoaded', async () => {
             try {
+                // Initialize DOM elements here, after DOMContentLoaded
+                urlInput = document.getElementById('url-input');
+                addUrlBtn = document.getElementById('add-url-btn');
+                monitoredUrlsSection = document.getElementById('monitored-urls-section');
+                monitoredUrlsList = document.getElementById('monitored-urls-list');
+                startMonitoringBtn = document.getElementById('start-monitoring-btn');
+                stopMonitoringBtn = document.getElementById('stop-monitoring-btn');
+                statusMessageSpan = document.getElementById('status-message');
+                userIdDisplay = document.getElementById('user-id-display');
+                userIdValueSpan = document.getElementById('user-id-value');
+                noHistoryMessage = document.getElementById('no-history-message');
+                downtimeTableWrapper = document.getElementById('downtime-table-wrapper');
+                downtimeHistoryTableBody = document.getElementById('downtime-history-table-body');
+                downloadDowntimeReportBtn = document.getElementById('download-downtime-report-btn');
+                downloadDailyReportBtn = document.getElementById('download-daily-report-btn');
+                analysisModal = document.getElementById('analysis-modal');
+                closeModalBtn = document.querySelector('.close-button');
+                analysisContent = document.getElementById('analysis-content');
+
+                // Now that DOM elements are initialized, update initial status message
+                if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+                    updateStatusMessage("Firebase not fully configured. Data persistence and user ID may not work. See console for details.");
+                } else {
+                    updateStatusMessage("Add URLs and start monitoring.");
+                }
+
+
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -395,32 +444,13 @@
         // State to track status and downtime start for each URL
         let monitoringStates = {}; // { [url: string]: { status: 'UP' | 'DOWN' | null, downTimeStart: number | null } }
 
-        // --- DOM Elements ---
-        // These are intentionally global to be accessible by all functions
-        const urlInput = document.getElementById('url-input');
-        const addUrlBtn = document.getElementById('add-url-btn');
-        const monitoredUrlsSection = document.getElementById('monitored-urls-section');
-        const monitoredUrlsList = document.getElementById('monitored-urls-list');
-        const startMonitoringBtn = document.getElementById('start-monitoring-btn');
-        const stopMonitoringBtn = document.getElementById('stop-monitoring-btn');
-        const statusMessageSpan = document.getElementById('status-message');
-        const userIdDisplay = document.getElementById('user-id-display');
-        const userIdValueSpan = document.getElementById('user-id-value');
-        const noHistoryMessage = document.getElementById('no-history-message');
-        const downtimeTableWrapper = document.getElementById('downtime-table-wrapper');
-        const downtimeHistoryTableBody = document.getElementById('downtime-history-table-body');
-        const downloadDowntimeReportBtn = document.getElementById('download-downtime-report-btn'); // Renamed
-        const downloadDailyReportBtn = document.getElementById('download-daily-report-btn'); // New button
-        const analysisModal = document.getElementById('analysis-modal');
-        const closeModalBtn = document.querySelector('.close-button');
-        const analysisContent = document.getElementById('analysis-content');
-
         // --- UI Update Functions ---
         function updateStatusMessage(message) {
+            // Ensure statusMessageSpan is initialized before use
             if (statusMessageSpan) {
                 statusMessageSpan.textContent = message;
             } else {
-                console.warn("Status message span not found.");
+                console.warn("Status message span not found. Message not displayed:", message);
             }
         }
 
@@ -1006,24 +1036,6 @@
                 console.error("Error calling Gemini API:", error);
             }
         }
-
-        // --- Modal Event Listeners ---
-        // These are now attached within the DOMContentLoaded block with null checks
-        // closeModalBtn.addEventListener('click', () => {
-        //     analysisModal.style.display = 'none';
-        // });
-        // window.addEventListener('click', (event) => {
-        //     if (event.target === analysisModal) {
-        //         analysisModal.style.display = 'none';
-        //     }
-        // });
-
-        // Initial render on load (now part of DOMContentLoaded)
-        // document.addEventListener('DOMContentLoaded', () => {
-        //     renderMonitoredUrls();
-        //     renderDowntimeHistory();
-        //     updateButtonStates();
-        // });
     </script>
 </body>
 </html>
