@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Website Downtime Monitor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background for the body */
+            color: #e2e8f0; /* Light text color for general body text */
+        }
+        /* Custom styles for button aesthetics and consistency */
+        button {
+            transition: all 0.2s ease-in-out;
+            border-radius: 0.5rem; /* Less rounded: rounded-lg */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); /* Softer shadow for dark mode */
+            padding: 1.125rem 2.25rem; /* Further increased padding: py-4.5 px-9 */
+            font-weight: 600; /* font-semibold */
+            color: #f9fafb; /* Light text color for buttons */
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px); /* Slightly less lift */
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); /* Deeper shadow on hover */
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.4; /* More faded when disabled */
+            box-shadow: none; /* No shadow when disabled */
+        }
+
+        /* Modern Color Palette (adjusted for dark mode) */
+        .bg-primary { background-color: #6366f1; } /* Indigo 500 */
+        .hover\:bg-primary-dark:hover { background-color: #4f46e5; } /* Indigo 600 */
+        .bg-success { background-color: #34d399; } /* Emerald 400 - Brighter green */
+        .hover\:bg-success-dark:hover { background-color: #10b981; } /* Emerald 600 */
+        .bg-danger { background-color: #f87171; } /* Red 400 - Softer red */
+        .hover\:bg-danger-dark:hover { background-color: #ef4444; } /* Red 500 */
+        .bg-info { background-color: #a78bfa; } /* Violet 400 - Softer purple */
+        .hover\:bg-info-dark:hover { background-color: #8b5cf6; } /* Violet 500 */
+        .text-light { color: #f9fafb; } /* Gray 50 */
+        .text-dark-contrast { color: #e2e8f0; } /* Light gray for main text */
+        .text-muted { color: #94a3b8; } /* Slate 400 for muted text */
+        .bg-card { background-color: #2d3748; } /* Darker gray for card backgrounds */
+        .border-card { border-color: #4a5568; } /* Darker border for cards */
+
+        /* Input field focus */
+        input {
+            background-color: #2d3748; /* Dark background for inputs */
+            color: #e2e8f0; /* Light text for inputs */
+            border-color: #4a5568; /* Darker border */
+        }
+        input:focus {
+            border-color: #6366f1; /* Indigo 500 */
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); /* Indigo 500 with opacity */
+        }
+
+        /* Modal specific styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.8); /* Even darker, more prominent overlay */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #2d3748; /* Dark background for modal */
+            padding: 32px;
+            border-radius: 1rem;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5); /* Stronger, deeper shadow for dark mode */
+            width: 90%;
+            max-width: 700px;
+            position: relative;
+            animation: fadeInScale 0.3s ease-out forwards;
+            color: #e2e8f0; /* Light text for modal content */
+        }
+        .close-button {
+            color: #94a3b8; /* Slate 400 */
+            font-size: 36px;
+            font-weight: bold;
+            position: absolute;
+            top: 12px;
+            right: 24px;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: #cbd5e0; /* Gray 300 */
+        }
+
+        /* Animation for modal */
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Table specific styles for dark mode */
+        table {
+            background-color: #2d3748; /* Dark background for table */
+        }
+        thead {
+            background-color: #242b38; /* Slightly darker header */
+        }
+        th {
+            color: #a0aec0; /* Lighter muted text for headers */
+        }
+        tbody tr {
+            border-color: #4a5568; /* Darker divider */
+        }
+        tbody td {
+            color: #e2e8f0; /* Light text for table cells */
+        }
+        .text-status-up { color: #34d399; } /* Emerald 400 */
+        .text-status-down { color: #f87171; } /* Red 400 */
+        .text-status-checking { color: #94a3b8; } /* Slate 400 */
+        .text-status-stopped { color: #6b7280; } /* Gray 500 */
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-6">
+    <div class="bg-card p-10 rounded-2xl shadow-2xl w-full max-w-4xl">
+        <h1 class="text-4xl font-bold text-text-dark-contrast mb-8 text-center">Website Downtime Monitor</h1>
+
+        <div class="mb-8 p-6 bg-card rounded-xl border border-card">
+            <label for="url-input" class="block text-text-dark-contrast text-lg font-semibold mb-3">
+                Add Website URL:
+            </label>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input
+                    id="url-input"
+                    type="text"
+                    class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2"
+                    placeholder="e.g., https://www.example.com"
+                />
+                <button
+                    id="add-url-btn"
+                    class="bg-primary hover:bg-primary-dark"
+                >
+                    Add URL
+                </button>
+            </div>
+        </div>
+
+        <div id="monitored-urls-section" class="mb-8 p-6 bg-card rounded-xl border border-card hidden">
+            <h2 class="text-2xl font-bold text-text-dark-contrast mb-4">Monitored URLs:</h2>
+            <ul id="monitored-urls-list" class="space-y-3">
+                <!-- Monitored URLs will be rendered here -->
+            </ul>
+        </div>
+
+        <div class="flex flex-col sm:flex-row justify-center gap-4 mb-8">
+            <button
+                id="start-monitoring-btn"
+                class="bg-success hover:bg-success-dark"
+            >
+                Start Monitoring
+            </button>
+            <button
+                id="stop-monitoring-btn"
+                class="bg-danger hover:bg-danger-dark"
+            >
+                Stop Monitoring
+            </button>
+        </div>
+
+        <div class="text-center mb-8 p-4 bg-card rounded-xl border border-card">
+            <p class="text-xl font-medium text-text-dark-contrast">Current Status: <span id="status-message" class="font-bold text-primary">Add URLs and start monitoring.</span></p>
+            <p id="user-id-display" class="text-sm text-muted mt-3 hidden">
+                Your User ID: <span id="user-id-value" class="font-mono break-all text-text-dark-contrast"></span>
+            </p>
+        </div>
+
+        <h2 class="text-3xl font-bold text-text-dark-contrast mb-6 text-center">Downtime History</h2>
+        <div id="downtime-history-container">
+            <p id="no-history-message" class="text-center text-muted text-lg">No downtime events recorded yet.</p>
+            <div class="overflow-x-auto rounded-lg border border-card hidden shadow-md" id="downtime-table-wrapper">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead class="bg-gray-800">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">
+                                URL
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">
+                                Down Time
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">
+                                Up Time
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">
+                                Duration
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">
+                                Analysis
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="downtime-history-table-body" class="divide-y divide-gray-700">
+                        <!-- Downtime events will be rendered here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="text-center mt-8 flex flex-col sm:flex-row justify-center gap-4">
+            <button
+                id="download-downtime-report-btn"
+                class="bg-info hover:bg-info-dark"
+                disabled
+            >
+                Download Downtime Report (CSV)
+            </button>
+            <button
+                id="download-daily-report-btn"
+                class="bg-primary hover:bg-primary-dark"
+                disabled
+            >
+                Download Daily Report (CSV)
+            </button>
+        </div>
+    </div>
+
+    <!-- The Modal Structure -->
+    <div id="analysis-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h3 class="text-2xl font-bold text-text-dark-contrast mb-6">Downtime Analysis</h3>
+            <div id="analysis-content" class="text-muted leading-relaxed">
+                <!-- LLM analysis will be loaded here -->
+                <p class="text-center text-primary font-semibold">Loading analysis... <span class="animate-pulse">...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase configuration and app ID.
+        // These are expected to be provided by the Canvas environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // FIX: Corrected the initialization of initialAuthToken
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- Firebase Initialization ---
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+
+        // Initialize Firebase and set up authentication listener
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                            userId = auth.currentUser?.uid || crypto.randomUUID();
+                        } catch (error) {
+                            console.error("Firebase authentication error:", error);
+                            userId = crypto.randomUUID(); // Fallback to random UUID
+                        }
+                    }
+                    isAuthReady = true;
+                    updateUserIdDisplay();
+                    // Once auth is ready, start listening for downtime history
+                    setupDowntimeHistoryListener();
+                });
+            } catch (error) {
+                console.error("Failed to initialize Firebase:", error);
+                updateStatusMessage("Error initializing Firebase. Check console for details.");
+            }
+        });
+
+        // --- Application State ---
+        let monitoredUrls = []; // Array of URLs being monitored
+        let globalMonitoringIntervalId = null;
+        let isMonitoring = false;
+        let downtimeHistory = [];
+        // State to track status and downtime start for each URL
+        let monitoringStates = {}; // { [url: string]: { status: 'UP' | 'DOWN' | null, downTimeStart: number | null } }
+
+        // --- DOM Elements ---
+        const urlInput = document.getElementById('url-input');
+        // FIX: Corrected assignment from `document = document.getElementById` to `document.getElementById`
+        const addUrlBtn = document.getElementById('add-url-btn');
+        const monitoredUrlsSection = document.getElementById('monitored-urls-section');
+        const monitoredUrlsList = document.getElementById('monitored-urls-list');
+        const startMonitoringBtn = document.getElementById('start-monitoring-btn');
+        const stopMonitoringBtn = document.getElementById('stop-monitoring-btn');
+        const statusMessageSpan = document.getElementById('status-message');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const userIdValueSpan = document.getElementById('user-id-value');
+        const noHistoryMessage = document.getElementById('no-history-message');
+        const downtimeTableWrapper = document.getElementById('downtime-table-wrapper');
+        const downtimeHistoryTableBody = document.getElementById('downtime-history-table-body');
+        const downloadDowntimeReportBtn = document.getElementById('download-downtime-report-btn'); // Renamed
+        const downloadDailyReportBtn = document.getElementById('download-daily-report-btn'); // New button
+        const analysisModal = document.getElementById('analysis-modal');
+        const closeModalBtn = document.querySelector('.close-button');
+        const analysisContent = document.getElementById('analysis-content');
+
+        // --- UI Update Functions ---
+        // FIX: Moved element assignments here to ensure they are initialized before being accessed
+        // This resolves the "Cannot access 'userIdValueSpan' before initialization" error
+        // by ensuring all DOM elements are properly referenced before `updateUserIdDisplay` is called.
+        // It also ensures `addUrlBtn` is correctly assigned.
+
+        function updateStatusMessage(message) {
+            statusMessageSpan.textContent = message;
+        }
+
+        function updateUserIdDisplay() {
+            if (userId && userIdValueSpan) { // Added check for userIdValueSpan
+                userIdValueSpan.textContent = userId;
+                userIdDisplay.classList.remove('hidden');
+            } else if (userIdDisplay) { // Added check for userIdDisplay
+                userIdDisplay.classList.add('hidden');
+            }
+        }
+
+        function renderMonitoredUrls() {
+            monitoredUrlsList.innerHTML = ''; // Clear existing list
+            if (monitoredUrls.length > 0) {
+                monitoredUrlsSection.classList.remove('hidden');
+                monitoredUrls.forEach((url, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'flex justify-between items-center py-2 text-text-dark-contrast border-b border-gray-700 last:border-b-0'; // Added border for separation
+
+                    // Get current status for live tracking
+                    const currentStatus = monitoringStates[url]?.status || null;
+                    let statusText = 'Checking...';
+                    let statusColorClass = 'text-status-checking'; // Default gray
+
+                    if (currentStatus === 'UP') {
+                        statusText = 'UP';
+                        statusColorClass = 'text-status-up'; // Green
+                    } else if (currentStatus === 'DOWN') {
+                        statusText = 'DOWN';
+                        statusColorClass = 'text-status-down'; // Red
+                    } else if (currentStatus === 'Stopped') { // New status for stopped
+                        statusText = 'Stopped';
+                        statusColorClass = 'text-status-stopped';
+                    }
+
+                    listItem.innerHTML = `
+                        <div class="flex items-center flex-wrap gap-2">
+                            <span class="text-base font-medium break-all">${url}</span>
+                            <span class="font-bold ${statusColorClass} text-sm" id="status-${btoa(url).replace(/=/g, '')}">
+                                ${statusText}
+                            </span>
+                        </div>
+                        <button
+                            data-url="${url}"
+                            class="remove-url-btn px-3 py-1 bg-danger hover:bg-danger-dark text-light text-xs font-semibold rounded-md shadow-sm"
+                            ${isMonitoring ? 'disabled' : ''}
+                        >
+                            Remove
+                        </button>
+                    `;
+                    monitoredUrlsList.appendChild(listItem);
+                });
+                // Attach event listeners to new remove buttons
+                document.querySelectorAll('.remove-url-btn').forEach(button => {
+                    button.onclick = (event) => removeUrl(event.target.dataset.url);
+                });
+            } else {
+                monitoredUrlsSection.classList.add('hidden');
+            }
+            updateButtonStates();
+        }
+
+        // New function to update only the live status of a URL
+        function updateLiveUrlStatus(url, status) {
+            const encodedUrlId = btoa(url).replace(/=/g, ''); // Base64 encode URL for a valid ID
+            const statusSpan = document.getElementById(`status-${encodedUrlId}`);
+            if (statusSpan) {
+                statusSpan.textContent = status;
+                statusSpan.classList.remove('text-status-checking', 'text-status-up', 'text-status-down', 'text-status-stopped');
+                if (status === 'UP') {
+                    statusSpan.classList.add('text-status-up');
+                } else if (status === 'DOWN') {
+                    statusSpan.classList.add('text-status-down');
+                } else if (status === 'Stopped') {
+                    statusSpan.classList.add('text-status-stopped');
+                } else {
+                    statusSpan.classList.add('text-status-checking'); // For 'Checking...' or initial state
+                }
+            }
+        }
+
+
+        function renderDowntimeHistory() {
+            downtimeHistoryTableBody.innerHTML = ''; // Clear existing table rows
+            if (downtimeHistory.length === 0) {
+                noHistoryMessage.classList.remove('hidden');
+                downtimeTableWrapper.classList.add('hidden');
+                downloadDowntimeReportBtn.disabled = true; // Disable download if no history
+            } else {
+                noHistoryMessage.classList.add('hidden');
+                downtimeTableWrapper.classList.remove('hidden');
+                downtimeHistory.forEach(event => {
+                    const tableRow = document.createElement('tr');
+                    tableRow.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-text-dark-contrast break-all">
+                            ${event.url}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-muted">
+                            ${new Date(event.downTime).toLocaleString()}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-muted">
+                            ${event.upTime ? new Date(event.upTime).toLocaleString() : 'Still Down'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-muted">
+                            ${formatDuration(event.duration)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-muted">
+                            <button
+                                data-event-id="${event.id}"
+                                class="analyze-downtime-btn px-3 py-1 bg-info hover:bg-info-dark text-light text-xs font-semibold rounded-md shadow-sm"
+                            >
+                                ✨ Analyze Downtime
+                            </button>
+                        </td>
+                    `;
+                    downtimeHistoryTableBody.appendChild(tableRow);
+                });
+                // Attach event listeners to new analyze buttons
+                document.querySelectorAll('.analyze-downtime-btn').forEach(button => {
+                    button.onclick = (event) => {
+                        const eventId = event.target.dataset.eventId;
+                        const eventData = downtimeHistory.find(e => e.id === eventId);
+                        if (eventData) {
+                            showDowntimeAnalysis(eventData);
+                        }
+                    };
+                });
+                downloadDowntimeReportBtn.disabled = false; // Enable download if history exists
+            }
+            updateButtonStates(); // Re-evaluate button states including download
+        }
+
+        function updateButtonStates() {
+            urlInput.disabled = isMonitoring;
+            addUrlBtn.disabled = isMonitoring;
+            startMonitoringBtn.disabled = isMonitoring || monitoredUrls.length === 0;
+            stopMonitoringBtn.disabled = !isMonitoring;
+            downloadDowntimeReportBtn.disabled = downtimeHistory.length === 0; // Ensure downtime download button state is correct
+            downloadDailyReportBtn.disabled = monitoredUrls.length === 0; // Daily report can be downloaded even if no downtime
+
+            document.querySelectorAll('.remove-url-btn').forEach(button => {
+                button.disabled = isMonitoring;
+            });
+
+            // Apply Tailwind classes for disabled state
+            if (isMonitoring) {
+                startMonitoringBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                startMonitoringBtn.classList.remove('bg-success', 'hover:bg-success-dark');
+                stopMonitoringBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                stopMonitoringBtn.classList.add('bg-danger', 'hover:bg-danger-dark');
+            } else {
+                startMonitoringBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                startMonitoringBtn.classList.add('bg-success', 'hover:bg-success-dark');
+                stopMonitoringBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                stopMonitoringBtn.classList.remove('bg-danger', 'hover:bg-danger-dark');
+            }
+
+            // Download buttons specific styling
+            if (downloadDowntimeReportBtn.disabled) {
+                downloadDowntimeReportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                downloadDowntimeReportBtn.classList.remove('bg-info', 'hover:bg-info-dark');
+            } else {
+                downloadDowntimeReportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                downloadDowntimeReportBtn.classList.add('bg-info', 'hover:bg-info-dark');
+            }
+
+            if (downloadDailyReportBtn.disabled) {
+                downloadDailyReportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                downloadDailyReportBtn.classList.remove('bg-primary', 'hover:bg-primary-dark');
+            } else {
+                downloadDailyReportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                downloadDailyReportBtn.classList.add('bg-primary', 'hover:bg-primary-dark');
+            }
+        }
+
+        // Helper to format duration
+        function formatDuration(ms) {
+            if (ms === null || ms === undefined) return 'N/A';
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(minutes / 1440); // 60 * 24
+
+            let parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours % 24 > 0) parts.push(`${hours % 24}h`);
+            if (minutes % 60 > 0) parts.push(`${minutes % 60}m`);
+            if (seconds % 60 > 0 || parts.length === 0) parts.push(`${seconds % 60}s`);
+
+            return parts.join(' ');
+        }
+
+        // --- Firebase Firestore Listener ---
+        function setupDowntimeHistoryListener() {
+            if (db && userId && isAuthReady) {
+                const downtimeCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/downtime_events`);
+                const q = query(downtimeCollectionRef);
+
+                onSnapshot(q, (snapshot) => {
+                    downtimeHistory = [];
+                    snapshot.forEach((doc) => {
+                        downtimeHistory.push({ id: doc.id, ...doc.data() });
+                    });
+                    // Sort history by downTime in descending order for display
+                    downtimeHistory.sort((a, b) => b.downTime - a.downTime);
+                    renderDowntimeHistory();
+                }, (error) => {
+                    console.error("Error fetching downtime history:", error);
+                    updateStatusMessage("Error loading history. Check console.");
+                });
+            }
+        }
+
+        // --- Core Monitoring Logic ---
+        async function checkSingleWebsiteStatus(targetUrl) {
+            // Update status to 'Checking...' immediately
+            updateLiveUrlStatus(targetUrl, 'Checking...');
+
+            // Use a reliable CORS proxy to bypass CORS restrictions for client-side fetch
+            const corsProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+
+            try {
+                const response = await fetch(corsProxyUrl, { method: 'GET', mode: 'cors' });
+                console.log(`Response for ${targetUrl}: Status ${response.status}, OK: ${response.ok}`); // Log response details
+
+                let currentState = monitoringStates[targetUrl] || { status: null, downTimeStart: null };
+                let newStatus = response.ok ? 'UP' : 'DOWN';
+                let newDownTimeStart = currentState.downTimeStart;
+
+                // Log every check to daily_monitoring_logs
+                if (db && userId) {
+                    try {
+                        await addDoc(collection(db, `artifacts/${appId}/users/${userId}/daily_monitoring_logs`), {
+                            url: targetUrl,
+                            timestamp: Date.now(),
+                            status: newStatus,
+                            statusCode: response.status
+                        });
+                    } catch (firestoreError) {
+                        console.error("Error adding daily log to Firestore:", firestoreError);
+                    }
+                }
+
+                if (newStatus === 'DOWN' && (currentState.status === 'UP' || currentState.status === null)) {
+                    // Website just went down or this is the first check and it's down
+                    newDownTimeStart = Date.now();
+                } else if (newStatus === 'UP' && currentState.status === 'DOWN' && currentState.downTimeStart) {
+                    // Website just came back up, record downtime event
+                    const upTime = Date.now();
+                    const duration = upTime - currentState.downTimeStart;
+
+                    if (db && userId) {
+                        try {
+                            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/downtime_events`), {
+                                url: targetUrl,
+                                downTime: currentState.downTimeStart,
+                                upTime: upTime,
+                                duration: duration,
+                                timestamp: Date.now()
+                            });
+                            console.log(`Downtime event recorded for ${targetUrl}.`);
+                        } catch (firestoreError) {
+                            console.error("Error adding downtime document to Firestore:", firestoreError);
+                            // Do not update status message for individual URL errors to avoid overwriting global status
+                        }
+                    }
+                    newDownTimeStart = null; // Reset downtime start after recording
+                }
+
+                monitoringStates = {
+                    ...monitoringStates,
+                    [targetUrl]: { status: newStatus, downTimeStart: newDownTimeStart }
+                };
+                updateLiveUrlStatus(targetUrl, newStatus); // Update live status display
+            } catch (error) {
+                let currentState = monitoringStates[targetUrl] || { status: null, downTimeStart: null };
+                let newDownTimeStart = currentState.downTimeStart;
+
+                if (currentState.status === 'UP' || currentState.status === null) {
+                    // Website just went down due to network error or this is the first check and it's down
+                    newDownTimeStart = Date.now();
+                }
+
+                monitoringStates = {
+                    ...monitoringStates,
+                    [targetUrl]: { status: 'DOWN', downTimeStart: newDownTimeStart }
+                };
+                updateLiveUrlStatus(targetUrl, 'DOWN'); // Update live status display
+                console.error(`Error checking status for ${targetUrl}:`, error); // Log the full error object for more details
+                console.warn(`Failed to fetch ${targetUrl}. This could be due to the website being genuinely down, network issues, or browser security policies (CORS) preventing direct access. The monitoring tool uses a proxy, but some sites may still block requests.`);
+
+                // Log the 'DOWN' status due to fetch error to daily_monitoring_logs
+                if (db && userId) {
+                    try {
+                        await addDoc(collection(db, `artifacts/${appId}/users/${userId}/daily_monitoring_logs`), {
+                            url: targetUrl,
+                            timestamp: Date.now(),
+                            status: 'DOWN',
+                            statusCode: 'Network Error' // Indicate a network error
+                        });
+                    } catch (firestoreError) {
+                        console.error("Error adding daily log for network error to Firestore:", firestoreError);
+                    }
+                }
+            }
+        }
+
+        function performAllChecks() {
+            if (monitoredUrls.length === 0) {
+                updateStatusMessage('No URLs to monitor. Add URLs to start.');
+                return;
+            }
+            updateStatusMessage(`Checking ${monitoredUrls.length} URLs... (Last checked: ${new Date().toLocaleTimeString()})`);
+            monitoredUrls.forEach(url => checkSingleWebsiteStatus(url));
+        }
+
+        function startMonitoring() {
+            if (monitoredUrls.length === 0) {
+                updateStatusMessage('Please add at least one URL to monitor.');
+                return;
+            }
+            if (globalMonitoringIntervalId) {
+                clearInterval(globalMonitoringIntervalId);
+            }
+            isMonitoring = true;
+            updateStatusMessage('Starting monitoring...');
+            // Initialize monitoring states for all URLs when starting
+            monitoringStates = {};
+            monitoredUrls.forEach(url => {
+                monitoringStates[url] = { status: null, downTimeStart: null };
+                updateLiveUrlStatus(url, 'Checking...'); // Set initial live status
+            });
+
+            performAllChecks(); // Perform an immediate check
+            globalMonitoringIntervalId = setInterval(performAllChecks, 10000); // Check every 10 seconds
+            updateButtonStates();
+        }
+
+        function stopMonitoring() {
+            if (globalMonitoringIntervalId) {
+                clearInterval(globalMonitoringIntervalId);
+                globalMonitoringIntervalId = null;
+            }
+            isMonitoring = false;
+            updateStatusMessage('Monitoring stopped.');
+            monitoringStates = {}; // Clear all monitoring states
+            // Reset live status display for all URLs
+            monitoredUrls.forEach(url => {
+                updateLiveUrlStatus(url, 'Stopped');
+            });
+            updateButtonStates();
+        }
+
+        function addUrl() {
+            const trimmedUrl = urlInput.value.trim();
+            if (trimmedUrl && !monitoredUrls.includes(trimmedUrl)) {
+                monitoredUrls.push(trimmedUrl);
+                urlInput.value = ''; // Clear input
+                updateStatusMessage(`Added ${trimmedUrl}. Click Start Monitoring.`);
+                renderMonitoredUrls(); // Re-render to show new URL with initial status
+            } else if (monitoredUrls.includes(trimmedUrl)) {
+                updateStatusMessage('URL is already in the list.');
+            } else {
+                updateStatusMessage('Please enter a valid URL.');
+            }
+        }
+
+        function removeUrl(urlToRemove) {
+            monitoredUrls = monitoredUrls.filter(url => url !== urlToRemove);
+            // Also remove its state from monitoringStates
+            const newStates = { ...monitoringStates };
+            delete newStates[urlToRemove];
+            monitoringStates = newStates;
+
+            updateStatusMessage(`Removed ${urlToRemove}.`);
+            renderMonitoredUrls(); // Re-render to remove URL from list
+            // If no URLs left, stop monitoring
+            if (monitoredUrls.length === 0 && isMonitoring) {
+                stopMonitoring();
+            }
+        }
+
+        // --- Download Report Functions ---
+        function downloadReport(reportType) {
+            if (reportType === 'downtime' && downtimeHistory.length === 0) {
+                updateStatusMessage("No downtime history to download.");
+                return;
+            }
+            if (reportType === 'daily' && monitoredUrls.length === 0) { // Daily report needs URLs to be monitored
+                updateStatusMessage("No URLs being monitored for a daily report.");
+                return;
+            }
+
+            let headers = [];
+            let csvContent = '';
+            let fileName = '';
+
+            if (reportType === 'downtime') {
+                headers = ["URL", "Down Time", "Up Time", "Duration"];
+                csvContent = headers.join(",") + "\n";
+                downtimeHistory.forEach(event => {
+                    const url = `"${event.url.replace(/"/g, '""')}"`;
+                    const downTime = new Date(event.downTime).toLocaleString();
+                    const upTime = event.upTime ? new Date(event.upTime).toLocaleString() : 'Still Down';
+                    const duration = formatDuration(event.duration);
+                    csvContent += `${url},"${downTime}","${upTime}","${duration}"\n`;
+                });
+                fileName = `downtime_report_${new Date().toISOString().slice(0,10)}.csv`;
+                updateStatusMessage("Downtime report downloaded.");
+
+            } else if (reportType === 'daily') {
+                headers = ["URL", "Timestamp", "Hour", "Status", "Status Code"]; // Added "Hour"
+                csvContent = headers.join(",") + "\n";
+
+                // Get start and end of today
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const startOfDay = today.getTime();
+                const endOfDay = Date.now(); // Up to the current moment
+
+                const dailyLogsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/daily_monitoring_logs`);
+                const q = query(dailyLogsCollectionRef);
+
+                getDocs(q).then((snapshot) => {
+                    let dailyLogs = [];
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        // Filter logs for today
+                        if (data.timestamp >= startOfDay && data.timestamp <= endOfDay) {
+                            dailyLogs.push(data);
+                        }
+                    });
+
+                    // Sort logs by URL, then by hour, then by timestamp for chronological order within each hour
+                    dailyLogs.sort((a, b) => {
+                        if (a.url < b.url) return -1;
+                        if (a.url > b.url) return 1;
+                        const hourA = new Date(a.timestamp).getHours();
+                        const hourB = new Date(b.timestamp).getHours();
+                        if (hourA < hourB) return -1;
+                        if (hourA > hourB) return 1;
+                        return a.timestamp - b.timestamp;
+                    });
+
+                    dailyLogs.forEach(log => {
+                        const url = `"${log.url.replace(/"/g, '""')}"`;
+                        const timestamp = new Date(log.timestamp).toLocaleString();
+                        const hour = new Date(log.timestamp).getHours(); // Extract hour
+                        const status = log.status;
+                        const statusCode = log.statusCode || 'N/A';
+                        csvContent += `${url},"${timestamp}",${hour},"${status}","${statusCode}"\n`; // Include hour in CSV
+                    });
+
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    if (link.download !== undefined) {
+                        const url = URL.createObjectURL(blob);
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `daily_monitoring_report_${new Date().toISOString().slice(0,10)}.csv`);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    } else {
+                        alert('Your browser does not support downloading files directly. Please copy the content manually.');
+                        console.log(csvContent);
+                    }
+                    updateStatusMessage("Daily monitoring report downloaded.");
+                }).catch((error) => {
+                    console.error("Error fetching daily monitoring logs:", error);
+                    updateStatusMessage("Error downloading daily report. Check console.");
+                });
+                return; // Exit here as getDocs is async
+            }
+
+            // This part only runs for downtime report
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', fileName);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                alert('Your browser does not support downloading files directly. Please copy the content manually.');
+                console.log(csvContent);
+            }
+        }
+
+
+        // --- LLM Integration: Downtime Analysis ---
+        async function showDowntimeAnalysis(eventData) {
+            analysisModal.style.display = 'flex'; // Show the modal
+            analysisContent.innerHTML = '<p class="text-center text-primary font-semibold">Loading analysis... <span class="animate-pulse">...</span></p>';
+
+            const url = eventData.url;
+            const downTime = new Date(eventData.downTime).toLocaleString();
+            const upTime = eventData.upTime ? new Date(eventData.upTime).toLocaleString() : 'Still Down';
+            const duration = formatDuration(eventData.duration);
+
+            const prompt = `Analyze the following website downtime event and provide a concise summary or potential implications.
+            Website URL: ${url}
+            Downtime Start: ${downTime}
+            Downtime End: ${upTime}
+            Duration: ${duration}
+
+            Focus on summarizing the event and any insights that can be drawn from the duration. Keep the response to 2-3 paragraphs.`;
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // Canvas will automatically provide this at runtime
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    analysisContent.innerHTML = `<p>${text.replace(/\n/g, '<br>')}</p>`; // Display analysis, convert newlines to <br>
+                } else {
+                    analysisContent.innerHTML = '<p class="text-danger">No analysis generated. The LLM response was empty or malformed.</p>';
+                    console.error("LLM response structure unexpected:", result);
+                }
+            } catch (error) {
+                analysisContent.innerHTML = `<p class="text-danger">Error generating analysis: ${error.message}. Please try again.</p>`;
+                console.error("Error calling Gemini API:", error);
+            }
+        }
+
+        // --- Modal Event Listeners ---
+        closeModalBtn.addEventListener('click', () => {
+            analysisModal.style.display = 'none';
+        });
+
+        // Close modal if user clicks outside of it
+        window.addEventListener('click', (event) => {
+            if (event.target === analysisModal) {
+                analysisModal.style.display = 'none';
+            }
+        });
+
+        // --- Event Listeners ---
+        addUrlBtn.addEventListener('click', addUrl);
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addUrl();
+            }
+        });
+        startMonitoringBtn.addEventListener('click', startMonitoring);
+        stopMonitoringBtn.addEventListener('click', stopMonitoring);
+        downloadDowntimeReportBtn.addEventListener('click', () => downloadReport('downtime')); // Updated
+        downloadDailyReportBtn.addEventListener('click', () => downloadReport('daily')); // New
+
+        // Initial render on load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMonitoredUrls();
+            renderDowntimeHistory();
+            updateButtonStates();
+        });
+    </script>
+</body>
+</html>
