@@ -252,10 +252,10 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // Updated Firebase SDK versions to 12.0.0 for consistency
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, getDocs, where } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        // Reverted Firebase SDK versions to 11.6.1 as per original instructions for better compatibility
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables for Canvas environment and user-provided Firebase configuration
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -326,6 +326,9 @@
 
                 // Log the Firebase config being used for debugging
                 console.log("Firebase config being used:", firebaseConfig);
+                console.log("Initial Auth Token provided by environment (raw __initial_auth_token):", typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : "NOT PROVIDED");
+                console.log("Resolved initialAuthToken variable (what the code uses):", initialAuthToken);
+
 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -336,15 +339,16 @@
                         userId = user.uid;
                         console.log("Firebase Auth: User signed in with UID:", userId);
                     } else {
-                        console.log("Firebase Auth: No user signed in. Attempting anonymous or custom token sign-in.");
+                        console.log("Firebase Auth: No user signed in. Attempting authentication.");
                         try {
-                            if (initialAuthToken) {
-                                console.log("Firebase Auth: Attempting signInWithCustomToken...");
+                            // Only attempt signInWithCustomToken if initialAuthToken is a non-empty string
+                            if (initialAuthToken && typeof initialAuthToken === 'string' && initialAuthToken.length > 0) {
+                                console.log("Firebase Auth: Attempting signInWithCustomToken with provided token...");
                                 await signInWithCustomToken(auth, initialAuthToken);
                                 userId = auth.currentUser?.uid;
                                 console.log("Firebase Auth: Signed in with custom token. UID:", userId);
                             } else {
-                                console.log("Firebase Auth: Attempting signInAnonymously...");
+                                console.log("Firebase Auth: No valid custom token provided. Attempting signInAnonymously...");
                                 await signInAnonymously(auth);
                                 userId = auth.currentUser?.uid;
                                 console.log("Firebase Auth: Signed in anonymously. UID:", userId);
@@ -352,19 +356,28 @@
                             userId = auth.currentUser?.uid || crypto.randomUUID(); // Fallback in case auth.currentUser is null immediately after sign-in
                         } catch (error) {
                             console.error("Firebase authentication error:", error);
-                            // More specific message for auth/configuration-not-found
-                            if (error.code === 'auth/configuration-not-found') {
-                                updateStatusMessage("Authentication failed: Anonymous Auth not enabled. Enable it in Firebase Console > Authentication > Sign-in method.");
-                                console.error("ACTION REQUIRED: Go to Firebase Console -> Authentication -> Sign-in method tab, and enable the 'Anonymous' sign-in provider.");
+                            // If custom token fails, try anonymous as a fallback
+                            if (error.code === 'auth/configuration-not-found' || error.code === 'auth/invalid-custom-token') {
+                                console.warn("Firebase Auth: Custom token failed or configuration not found. Falling back to anonymous sign-in...");
+                                try {
+                                    await signInAnonymously(auth);
+                                    userId = auth.currentUser?.uid;
+                                    console.log("Firebase Auth: Successfully signed in anonymously as fallback. UID:", userId);
+                                    updateStatusMessage("Authentication successful (Anonymous).");
+                                } catch (anonError) {
+                                    console.error("Firebase authentication error (Anonymous fallback failed):", anonError);
+                                    updateStatusMessage("Authentication failed. Data persistence may not work. Check console. Ensure Anonymous Auth is enabled in Firebase Console.");
+                                    console.error("ACTION REQUIRED: Go to Firebase Console -> Authentication -> Sign-in method tab, and enable the 'Anonymous' sign-in provider.");
+                                    userId = crypto.randomUUID(); // Final fallback
+                                }
                             } else {
-                                updateStatusMessage("Authentication failed. Data persistence may not work. Check console.");
+                                updateStatusMessage("Authentication failed. Data persistence may not work. Check console for details.");
+                                userId = crypto.randomUUID(); // Fallback
                             }
-                            userId = crypto.randomUUID(); // Fallback to random UUID if auth fails
                         }
                     }
                     isAuthReady = true;
                     updateUserIdDisplay();
-                    // Once auth is ready, start listening for downtime history
                     setupDowntimeHistoryListener();
                 });
             } catch (error) {
