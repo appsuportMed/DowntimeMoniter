@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Website Downtime Monitor</title>
+    <title>Multi-Website Downtine Monitor</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter font -->
@@ -252,14 +252,22 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Updated Firebase SDK versions to 12.0.0 for consistency
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, getDocs, where } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-        // Global variables for Firebase configuration and app ID.
-        // These are expected to be provided by the Canvas environment.
+        // Global variables for Canvas environment and user-provided Firebase configuration
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        let firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const firebaseConfig = {
+            apiKey: "AIzaSyBtogaxUpkElejwAx268L-2JJmTpCPJ1Ks",
+            authDomain: "appsupmed.firebaseapp.com",
+            projectId: "appsupmed",
+            storageBucket: "appsupmed.firebasestorage.app",
+            messagingSenderId: "278834217133",
+            appId: "1:278834217133:web:43b22479f11d80523dc624",
+            measurementId: "G-JLRP3PN1VE"
+        };
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // --- Firebase Initialization ---
@@ -269,25 +277,9 @@
         let userId = null;
         let isAuthReady = false;
 
-        // Ensure firebaseConfig has required properties, or provide clear placeholders
-        if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-            console.warn("Firebase projectId or apiKey not found in __firebase_config. Using non-functional placeholders. Please provide your actual Firebase config for full functionality.");
-            firebaseConfig = {
-                apiKey: firebaseConfig.apiKey || "YOUR_FIREBASE_API_KEY",
-                authDomain: firebaseConfig.authDomain || "YOUR_FIREBASE_AUTH_DOMAIN",
-                projectId: firebaseConfig.projectId || "YOUR_FIREBASE_PROJECT_ID",
-                storageBucket: firebaseConfig.storageBucket || "YOUR_FIREBASE_STORAGE_BUCKET",
-                messagingSenderId: firebaseConfig.messagingSenderId || "YOUR_FIREBASE_MESSAGING_SENDER_ID",
-                appId: firebaseConfig.appId || "YOUR_FIREBASE_APP_ID",
-                // Add any other missing properties with placeholders
-            };
-            // Initial status update before DOM elements are guaranteed to be ready
-            // This message will be updated once DOM is loaded and statusMessageSpan is available
-        }
-
 
         // --- DOM Elements ---
-        // Moved inside DOMContentLoaded to ensure they are available when accessed
+        // Declared here, initialized inside DOMContentLoaded
         let urlInput;
         let addUrlBtn;
         let monitoredUrlsSection;
@@ -330,12 +322,10 @@
                 analysisContent = document.getElementById('analysis-content');
 
                 // Now that DOM elements are initialized, update initial status message
-                if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
-                    updateStatusMessage("Firebase not fully configured. Data persistence and user ID may not work. See console for details.");
-                } else {
-                    updateStatusMessage("Add URLs and start monitoring.");
-                }
+                updateStatusMessage("Add URLs and start monitoring.");
 
+                // Log the Firebase config being used for debugging
+                console.log("Firebase config being used:", firebaseConfig);
 
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -344,18 +334,32 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
+                        console.log("Firebase Auth: User signed in with UID:", userId);
                     } else {
+                        console.log("Firebase Auth: No user signed in. Attempting anonymous or custom token sign-in.");
                         try {
                             if (initialAuthToken) {
+                                console.log("Firebase Auth: Attempting signInWithCustomToken...");
                                 await signInWithCustomToken(auth, initialAuthToken);
+                                userId = auth.currentUser?.uid;
+                                console.log("Firebase Auth: Signed in with custom token. UID:", userId);
                             } else {
+                                console.log("Firebase Auth: Attempting signInAnonymously...");
                                 await signInAnonymously(auth);
+                                userId = auth.currentUser?.uid;
+                                console.log("Firebase Auth: Signed in anonymously. UID:", userId);
                             }
-                            userId = auth.currentUser?.uid || crypto.randomUUID();
+                            userId = auth.currentUser?.uid || crypto.randomUUID(); // Fallback in case auth.currentUser is null immediately after sign-in
                         } catch (error) {
                             console.error("Firebase authentication error:", error);
-                            userId = crypto.randomUUID(); // Fallback to random UUID
-                            updateStatusMessage("Authentication failed. Data persistence may not work. Check console.");
+                            // More specific message for auth/configuration-not-found
+                            if (error.code === 'auth/configuration-not-found') {
+                                updateStatusMessage("Authentication failed: Anonymous Auth not enabled. Enable it in Firebase Console > Authentication > Sign-in method.");
+                                console.error("ACTION REQUIRED: Go to Firebase Console -> Authentication -> Sign-in method tab, and enable the 'Anonymous' sign-in provider.");
+                            } else {
+                                updateStatusMessage("Authentication failed. Data persistence may not work. Check console.");
+                            }
+                            userId = crypto.randomUUID(); // Fallback to random UUID if auth fails
                         }
                     }
                     isAuthReady = true;
@@ -991,7 +995,7 @@
 
             const url = eventData.url;
             const downTime = new Date(eventData.downTime).toLocaleString();
-            const upTime = eventData.upTime ? new Date(eventData.upTime).toLocaleString() : 'Still Down';
+            const upTime = eventData.upTime ? new Date(event.upTime).toLocaleString() : 'Still Down';
             const duration = formatDuration(eventData.duration);
 
             const prompt = `Analyze the following website downtime event and provide a concise summary or potential implications.
