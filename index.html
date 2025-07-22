@@ -270,6 +270,19 @@
         let userId = null;
         let isAuthReady = false;
 
+        // Ensure firebaseConfig has a projectId, or provide a placeholder if missing
+        if (!firebaseConfig.projectId) {
+            console.warn("Firebase projectId not found in __firebase_config. Using a placeholder.");
+            firebaseConfig.projectId = "your-placeholder-project-id"; // Use a placeholder
+            // Add other necessary default properties if they might be missing
+            firebaseConfig.apiKey = firebaseConfig.apiKey || "your-placeholder-api-key";
+            firebaseConfig.authDomain = firebaseConfig.authDomain || "your-placeholder-auth-domain";
+            firebaseConfig.databaseURL = firebaseConfig.databaseURL || "your-placeholder-database-url";
+            firebaseConfig.storageBucket = firebaseConfig.storageBucket || "your-placeholder-storage-bucket";
+            firebaseConfig.messagingSenderId = firebaseConfig.messagingSenderId || "your-placeholder-messaging-sender-id";
+            firebaseConfig.appId = firebaseConfig.appId || "your-placeholder-app-id";
+        }
+
         // Initialize Firebase and set up authentication listener
         document.addEventListener('DOMContentLoaded', async () => {
             try {
